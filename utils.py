@@ -125,9 +125,7 @@ def plot_bar_charts(df, categorical_cols, ncols=2, orientation='vertical', sort_
             ax.set_ylabel('Value')
             # Apply custom labels based on integer or float
             labels = value_counts.index
-            print('Unique values: ', labels)
             custom_labels = [int(label) if int(label) == float(label) else round(label, 2) for label in labels]  # Format labels
-            print('Custom labels: ', custom_labels)
             ax.set_yticklabels(custom_labels)  # Apply formatted labels
             ax.grid(axis='x', alpha=0.75)
 
@@ -139,7 +137,7 @@ def plot_bar_charts(df, categorical_cols, ncols=2, orientation='vertical', sort_
     plt.show()
 
 
-def plot_correlation_matrix(df, numeric_cols, cmap='Blues'):
+def plot_correlation_matrix(df, numeric_cols, cmap='Blues', threshold=0.9):
     """
     Plot the correlation matrix for the specified numeric columns in a DataFrame.
 
@@ -153,15 +151,34 @@ def plot_correlation_matrix(df, numeric_cols, cmap='Blues'):
     # Compute the correlation matrix
     corr_matrix = df[numeric_cols].corr()
 
+    # Select upper triangle of the correlation matrix to avoid duplicates
+    upper_triangle = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+
+    # Filter pairs with correlation greater than the threshold
+    high_corr_pairs = upper_triangle.stack().reset_index()
+    high_corr_pairs.columns = ['variable_1', 'variable_2', 'correlation']
+    high_corr_pairs = high_corr_pairs[high_corr_pairs['correlation'].abs() > threshold]
+
+    # Create a mask for values less than or equal to threshold
+    mask = corr_matrix.abs() <= threshold
+    #annotated_matrix = corr_matrix.where(~mask)  # Replace masked values with NaN
+
     # Plot the correlation matrix
-    plt.figure(figsize=(10, 8))  # Adjust the figure size as needed
-    sns.heatmap(abs(corr_matrix), annot=corr_matrix, cmap=cmap, fmt='.2f', linewidths=0.5, cbar=True)
+    plt.figure(figsize=(15, 12))  # Adjust the figure size as needed
+    sns.heatmap(abs(corr_matrix),
+                annot=corr_matrix,
+                cmap=cmap, 
+                fmt='.2f', 
+                linewidths=0.5, 
+                cbar=True,
+                mask=mask)
 
     # Customize the plot
     plt.title('Correlation Matrix of Numeric Variables')
     plt.tight_layout()  # Adjust layout to avoid clipping
     plt.show()
 
+    return high_corr_pairs
 
 def plot_price_trends(df, price_cols, date_col, id_col, start_date='2015-01-01', end_date='2015-12-31', n_sample=5):
     """
@@ -279,7 +296,7 @@ def plot_histograms_for_sparse_cols(df, numeric_cols, zero_threshold=0.3):
 
     plt.show()
 
-def apply_log_transformation_and_impute(df, numeric_cols, skewness_threshold=1.0, target='churn'):
+def apply_log_transformation_and_impute(df, cols, skewness_threshold=1.0, target='churn'):
     """
     Apply log transformation to skewed numeric columns and impute missing values in a way that minimizes the 
     change in Point-Biserial correlation with the target variable. The skewness is computed based on non-zero values.
@@ -293,40 +310,45 @@ def apply_log_transformation_and_impute(df, numeric_cols, skewness_threshold=1.0
     Returns:
     pd.DataFrame: The dataframe with transformed columns and imputed values.
     """
-    # Step 1: Identify columns with skewness above the threshold for log transformation (consider only non-zero values)
-    skewness = df[numeric_cols].apply(lambda col: col[col != 0].skew(), axis=0)
-    cols_with_many_zeros = [col for col in skewness.index if abs(skewness[col]) > skewness_threshold]
+    skewness = df[cols].apply(lambda col: col[col != 0].skew(), axis=0)
+    skewed_cols = [col for col in skewness.index if abs(skewness[col]) > skewness_threshold]
+    transformed_cols = []
 
-    for col in cols_with_many_zeros:
-        # Step 2: Create a flag column for zero values
+    for col in cols:
         flag_col = f'is_zero_{col}'
         df[flag_col] = (df[col] == 0).astype(int)  # Flag for zero vs. non-zero
 
-        # Step 3: Log-transform non-zero values or set 0s to missing (for special columns like 'forecast_price_energy_peak')
-        if col != 'forecast_price_energy_peak':
-            new_col_name_log = f'{col}_distr_log_transformed'
-            df[new_col_name_log] = np.where(df[col] != 0, np.log1p(df[col]), np.nan)  # log(x + 1) for non-zero values
+        if (col in skewed_cols) and (skewness[col]<0):
+            col_name = f"{col}_square"
+            #df[col_name] = df[col].apply(lambda x: x**2)
+            df[col_name] = np.where(df[col] != 0, df[col]**2, np.nan)
+        elif (col in skewed_cols) and (skewness[col]>0):
+            col_name = f"{col}_log"
+            #df[col_name] = df[col].apply(lambda x: np.log1p(x))
+            df[col_name] = np.where(df[col] != 0, np.log1p(df[col]), np.nan)
         else:
-            new_col_name_log = f'{col}_distr'
-            df[new_col_name_log] = np.where(df[col] != 0, df[col], np.nan)
+            col_name = f"{col}_distr"
+            df[col_name] = np.where(df[col] != 0, df[col], np.nan)
 
-        # Step 4: Calculate the original Point-Biserial correlation before imputation
-        valid_rows = df[[new_col_name_log, target]].dropna()  # Drop rows with NaN in either column
-        original_corr, _ = pointbiserialr(valid_rows[new_col_name_log], valid_rows[target].map({'No': 0, 'Yes': 1}))
-        print(f'Original Point-Biserial Correlation for {new_col_name_log}: {original_corr:.3f}')
+        transformed_cols.append(col_name)
+
+        # Calculate the original Point-Biserial correlation before imputation
+        valid_rows = df[[col_name, target]].dropna()  # Drop rows with NaN in either column
+        original_corr, _ = pointbiserialr(valid_rows[col_name], valid_rows[target].map({'No': 0, 'Yes': 1}))
+        print(f'Original Point-Biserial Correlation for {col_name}: {original_corr:.3f}')
 
         # Step 5: Impute missing values and choose the value that minimizes the change in correlation
         best_imputation = None
         best_corr_diff = float('inf')
-        candidate_values = np.linspace(df[new_col_name_log].min(), df[new_col_name_log].max(), 100)  # Imputation candidates
+        candidate_values = np.linspace(df[col_name].min(), df[col_name].max(), 100)  # Imputation candidates
 
         # Try imputing with each candidate value
         for value in candidate_values:
-            temp_df = df[[new_col_name_log, target]].copy()
-            temp_df[new_col_name_log] = temp_df[new_col_name_log].fillna(value)
+            temp_df = df[[col_name, target]].copy()
+            temp_df[col_name] = temp_df[col_name].fillna(value)
 
             # Calculate the Point-Biserial correlation after imputation
-            new_corr, _ = pointbiserialr(temp_df[new_col_name_log], temp_df[target].map({'No': 0, 'Yes': 1}))
+            new_corr, _ = pointbiserialr(temp_df[col_name], temp_df[target].map({'No': 0, 'Yes': 1}))
 
             # Calculate the absolute difference between the original and new correlation
             corr_diff = abs(original_corr - new_corr)
@@ -339,9 +361,9 @@ def apply_log_transformation_and_impute(df, numeric_cols, skewness_threshold=1.0
         # Delete the temp_df after using it
         del temp_df
         
-        # Step 6: Impute the missing values with the best value
-        df[new_col_name_log] = df[new_col_name_log].fillna(best_imputation)
+        # Impute the missing values with the best value
+        df[col_name] = df[col_name].fillna(best_imputation)
         print(f'Best imputation for {col}: {best_imputation}')
         print(f'Point-Biserial Correlation difference: {best_corr_diff}')
     
-    return df, skewness
+    return df, skewness, transformed_cols
