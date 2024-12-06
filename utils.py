@@ -133,7 +133,8 @@ def plot_bar_charts(df, categorical_cols, ncols=2, orientation='vertical', sort_
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
-    # Display the plot
+    # Show the plot
+    plt.tight_layout()
     plt.show()
 
 
@@ -236,6 +237,7 @@ def plot_price_trends(df, price_cols, date_col, id_col, start_date='2015-01-01',
         ax.set_title(f'{price_col} Trend (2015)', fontsize=14)
         ax.set_xlabel('Month', fontsize=12)
         ax.set_ylabel('Price', fontsize=12)
+        ax.tick_params(axis='x', rotation=45)
         ax.grid(True)
 
     # Show the plot
@@ -294,6 +296,8 @@ def plot_histograms_for_sparse_cols(df, numeric_cols, zero_threshold=0.3):
     for k in range(num_plots, len(axes)):
         fig.delaxes(axes[k])
 
+    # Show the plot
+    plt.tight_layout()
     plt.show()
 
 def apply_log_transformation_and_impute(df, cols, skewness_threshold=1.0, target='churn'):
