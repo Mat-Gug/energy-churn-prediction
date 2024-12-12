@@ -56,10 +56,10 @@ def compute_and_sort_statistics(df, numeric_cols, by='zero_counts', ascending=Fa
 
     return sorted_combined_df
 
-def plot_numeric_distributions(df, numeric_cols):
+def plot_numeric_distributions(df, numeric_cols, n_cols=3):
     num_plots = len(numeric_cols)
-    num_rows = (num_plots // 3) + (1 if num_plots % 3 else 0)  # Calculate number of rows (round up)
-    fig, axes = plt.subplots(num_rows, 3, figsize=(15, num_rows * 5), layout="constrained")
+    num_rows = (num_plots // n_cols) + (1 if num_plots % n_cols else 0)  # Calculate number of rows (round up)
+    fig, axes = plt.subplots(num_rows, n_cols, figsize=(5 * n_cols, num_rows * 5), layout="constrained")
 
     # Flatten the axes array for easier iteration
     axes = axes.flatten()
@@ -392,3 +392,72 @@ def apply_log_transformation_and_impute(df, cols, skewness_threshold=1.0, target
         print(f'Point-Biserial Correlation difference: {best_corr_diff}')
     
     return df, skewness, transformed_cols
+
+
+def engineer_saz_features(df, cols, skewness_threshold=1.0, target='churn'):
+    """
+    Apply log transformation to skewed numeric columns and impute missing values in a way that minimizes the 
+    change in Point-Biserial correlation with the target variable. The skewness is computed based on non-zero values.
+
+    Parameters:
+    df (pd.DataFrame): The input dataframe.
+    numeric_cols (list): A list of numeric column names to process.
+    skewness_threshold (float): The skewness threshold above which the log transformation is applied.
+    target (str): The target variable (e.g., 'churn').
+
+    Returns:
+    pd.DataFrame: The dataframe with transformed columns and imputed values.
+    """
+    skewness = df[cols].apply(lambda col: col[col != 0].skew(), axis=0)
+    skewed_cols = [col for col in skewness.index if abs(skewness[col]) > skewness_threshold]
+    transformed_cols = []
+
+    for col in cols:
+        flag_col = f'is_zero_{col}'
+        df[flag_col] = (df[col] == 0).astype(int).astype('object')  # Flag for zero vs. non-zero
+        df.loc[:, flag_col] = df[flag_col].map({0: 'No', 1: 'Yes'})
+        
+        if (col in skewed_cols) and (skewness[col]<0):
+            col_name = f"{col}_square"
+            #df[col_name] = df[col].apply(lambda x: x**2)
+            df[col_name] = np.where(df[col] != 0, df[col]**2, np.nan)
+        elif (col in skewed_cols) and (skewness[col]>0):
+            col_name = f"{col}_log"
+            #df[col_name] = df[col].apply(lambda x: np.log1p(x))
+            df[col_name] = np.where(df[col] != 0, np.log1p(df[col]), np.nan)
+        else:
+            col_name = f"{col}_distr"
+            df[col_name] = np.where(df[col] != 0, df[col], np.nan)
+
+        transformed_cols.append(col_name)
+    
+    return df, transformed_cols
+
+def remove_underrepresented_categories(df, columns, threshold=0.01):
+    """
+    Remove rows belonging to categories that appear in less than the specified threshold (e.g., 1%) of total observations.
+    
+    Parameters:
+    - df: The input DataFrame.
+    - columns: List of column names to process.
+    - threshold: The minimum proportion (between 0 and 1) to keep categories.
+    
+    Prints out the removed categories and which columns they belong to.
+    """
+    for column in columns:
+        # Get the category counts and their proportions
+        category_counts = df[column].value_counts(normalize=True)
+        
+        # Find categories under the threshold
+        underrepresented_categories = category_counts[category_counts < threshold].index
+        
+        if len(underrepresented_categories) > 0:
+            # Print the removed categories and the column they belong to
+            print(f"\nRemoved categories from '{column}':")
+            for category in underrepresented_categories:
+                print(f"  - {category}")
+                
+            # Remove rows that belong to underrepresented categories
+            df = df[~df[column].isin(underrepresented_categories)]
+    
+    return df
