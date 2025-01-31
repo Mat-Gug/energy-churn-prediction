@@ -25,14 +25,24 @@ from imblearn.under_sampling import RandomUnderSampler
 
 def split_data_and_generate_column_lists(df, target):
     """
-    Analyzes and splits the input dataframe into training and testing sets. 
+    Analyzes and splits the input dataframe into training and testing sets.
     Also analyzes the distribution of the target variable and handles missing data.
 
     Parameters:
-    merged_df (pandas.DataFrame): The input dataset containing features and the target variable.
+    df (pandas.DataFrame): The input dataset containing features and the target variable.
     target (str): The name of the target variable.
-    """
 
+    Returns:
+    tuple: A tuple containing:
+        - X_train (pandas.DataFrame): The training feature set.
+        - X_test (pandas.DataFrame): The test feature set.
+        - y_train (pandas.Series): The training target set.
+        - y_test (pandas.Series): The test target set.
+        - cat_cols (list): List of categorical columns in the dataset.
+        - cat_cols_with_two_values (list): List of categorical columns with exactly two unique values.
+        - cat_cols_with_more_values (list): List of categorical columns with more than two unique values.
+        - numeric_cols (list): List of numeric columns in the dataset.
+    """
     # Separate features (X) and target variable (y)
     X = df.drop(['id', target], axis=1)
     y = df[target]
@@ -65,6 +75,12 @@ def split_data_and_generate_column_lists(df, target):
 
 # Custom Transformer for Missing Value Imputation
 class MissingValueImputer(BaseEstimator, TransformerMixin):
+    """
+    Custom transformer for imputing missing values in numeric columns using a regression model.
+
+    Attributes:
+    imputation_models (dict): Dictionary storing models for imputing missing values per column.
+    """
     def __init__(self):
         self.imputation_models = {}
     
@@ -93,6 +109,15 @@ class MissingValueImputer(BaseEstimator, TransformerMixin):
         return self
     
     def transform(self, X):
+        """
+        Imputes missing values in the dataset using the previously trained models.
+
+        Parameters:
+        X (pandas.DataFrame): The dataset with missing values to be imputed.
+
+        Returns:
+        pandas.DataFrame: The dataset with imputed values.
+        """
         X = X.copy()
         #y = y.copy()
         #X_with_y = pd.concat([X, y], axis=1)
@@ -111,32 +136,82 @@ class MissingValueImputer(BaseEstimator, TransformerMixin):
         return X
 
 class DataScaler(BaseEstimator, TransformerMixin):
+    """
+    Custom transformer for standardizing numeric columns in a dataset.
+
+    Attributes:
+    numeric_cols (list): List of numeric columns to be scaled.
+    scaler (StandardScaler): The scaler used for standardization.
+    """
     def __init__(self, numeric_cols):
         self.numeric_cols = numeric_cols
         self.scaler = StandardScaler()
     
     def fit(self, X, y=None):
+        """
+        Fits the scaler on the numeric columns.
+
+        Parameters:
+        X (pandas.DataFrame): The dataset to be fitted.
+        y (pandas.Series, optional): The target variable (not used in this transformer).
+
+        Returns:
+        self: The fitted scaler.
+        """
         self.scaler.fit(X[self.numeric_cols])
         return self
     
     def transform(self, X):
+        """
+        Transforms the dataset by scaling the numeric columns.
+
+        Parameters:
+        X (pandas.DataFrame): The dataset to be transformed.
+
+        Returns:
+        pandas.DataFrame: The dataset with scaled numeric columns.
+        """
         X = X.copy()
         X = X.apply(lambda x: x.astype('float64') if x.dtype == 'int64' else x)
         X[self.numeric_cols] = self.scaler.transform(X[self.numeric_cols])
         return X
 
 class CategoricalLevelFilter(BaseEstimator, TransformerMixin):
+    """
+    Custom transformer to filter rows based on the categories observed during training for categorical columns.
+
+    Attributes:
+    levels (dict): Dictionary of categorical columns and their observed levels.
+    """
     def __init__(self):
         self.levels = {}
 
     def fit(self, X, y=None):
-        # Store unique categories for each categorical column
+        """
+        Identifies unique categories for each categorical column.
+
+        Parameters:
+        X (pandas.DataFrame): The dataset to be fitted.
+        y (pandas.Series, optional): The target variable (not used in this transformer).
+
+        Returns:
+        self: The fitted transformer.
+        """
         cat_cols = X.select_dtypes(exclude='number').columns
         self.levels = {col: set(X[col].unique()) 
                        for col in cat_cols}
         return self
 
     def transform(self, X):
+        """
+        Filters rows containing categories that were not observed during training.
+
+        Parameters:
+        X (pandas.DataFrame): The dataset to be transformed.
+
+        Returns:
+        pandas.DataFrame: The filtered dataset.
+        """
         X_filtered = X.copy()
         # Create a mask for all categorical columns
         mask = pd.Series(True, index=X.index)
@@ -148,7 +223,17 @@ class CategoricalLevelFilter(BaseEstimator, TransformerMixin):
         return X_filtered
 
 # Define the pipeline
-def create_pipeline(model, numeric_cols=None, scaler=True):
+def create_pipeline(model, numeric_cols=None):
+    """
+    Creates a machine learning pipeline with steps for missing value imputation, scaling, and categorical filtering.
+
+    Parameters:
+    model (sklearn.base.BaseEstimator): The machine learning model to be used in the pipeline.
+    numeric_cols (list, optional): List of numeric columns to be scaled.
+
+    Returns:
+    sklearn.pipeline.Pipeline: The constructed pipeline.
+    """
     steps = []
 
     # Custom missing value imputation transformer
@@ -167,6 +252,21 @@ def create_pipeline(model, numeric_cols=None, scaler=True):
     return Pipeline(steps)
 
 def compute_auc(model, X_train, y_train, X_val, y_val):
+    """
+    Computes the AUC (Area Under the Curve) score for both training and validation datasets.
+
+    Parameters:
+    model (sklearn.base.BaseEstimator): The trained machine learning model.
+    X_train (pandas.DataFrame): The training dataset features.
+    y_train (pandas.Series): The training dataset target.
+    X_val (pandas.DataFrame): The validation dataset features.
+    y_val (pandas.Series): The validation dataset target.
+
+    Returns:
+    tuple: A tuple containing:
+        - AUC score for the training data.
+        - AUC score for the validation data.
+    """
     if type(model.predict_proba(X_train))==pd.core.frame.DataFrame:
         y_proba_train = model.predict_proba(X_train).iloc[:, 1]
         y_proba_val = model.predict_proba(X_val).iloc[:, 1]
@@ -174,13 +274,38 @@ def compute_auc(model, X_train, y_train, X_val, y_val):
         y_proba_train = model.predict_proba(X_train)[:, 1]
         y_proba_val = model.predict_proba(X_val)[:, 1]
 
+    # print('X_train:', X_train.shape)
+    # print('y_train:', y_train.shape)
+    # print('y_proba_train:', y_proba_train.shape)
+    # print('X_val:', X_val.shape)
+    # print('y_val:', y_val.shape)
+    # print('y_proba_val:', y_proba_val.shape)
+    
     return roc_auc_score(y_train, y_proba_train), roc_auc_score(y_val, y_proba_val)
 
 def train_and_evaluate_model(
     X, y, model, model_type, library, 
     numeric_cols=None, nominals=None, k=5, 
-    resampling=True, sampling_strategy=0.25, imbalance=False
+    resampling=True, sampling_strategy=0.25
 ):
+    """
+    Trains and evaluates a model using k-fold cross-validation.
+
+    Parameters:
+    X (pandas.DataFrame): The features dataset.
+    y (pandas.Series): The target variable dataset.
+    model (sklearn.base.BaseEstimator): The machine learning model to be trained.
+    model_type (str): The type of model.
+    library (str): The library being used (e.g., "SAS" or "sklearn").
+    numeric_cols (list, optional): List of numeric columns to be scaled.
+    nominals (list, optional): List of nominal columns.
+    k (int, optional): Number of cross-validation folds (default is 5).
+    resampling (bool, optional): Whether to use resampling (default is True).
+    sampling_strategy (float, optional): Resampling strategy for imbalanced datasets (default is 0.25).
+
+    Returns:
+    dict: A dictionary containing the model, evaluation metrics, and cross-validation results.
+    """
     kf = StratifiedKFold(n_splits=k, shuffle=True, random_state=12345)
 
     auc_train_scores, auc_val_scores = [], []
@@ -232,6 +357,15 @@ def train_and_evaluate_model(
 
 
 def create_sklearn_rf(trial):
+    """
+    Creates a Random Forest classifier using scikit-learn with hyperparameters optimized via Optuna.
+
+    Parameters:
+    trial (optuna.trial.Trial): The Optuna trial used for hyperparameter optimization.
+
+    Returns:
+    SKRandomForestClassifier: A scikit-learn RandomForestClassifier instance with hyperparameters set based on the trial.
+    """
     rf_n_estimators = trial.suggest_int("rf_n_estimators", 20, 100)
     rf_max_depth = trial.suggest_int("rf_max_depth", 5, 25)
     rf_min_samples_leaf = trial.suggest_int("rf_min_samples_leaf", 5, 30)
@@ -248,6 +382,15 @@ def create_sklearn_rf(trial):
     )
 
 def create_sas_rf(trial):
+    """
+    Creates a Random Forest classifier using sasviya with hyperparameters optimized via Optuna.
+
+    Parameters:
+    trial (optuna.trial.Trial): The Optuna trial used for hyperparameter optimization.
+
+    Returns:
+    SASForestClassifier: A SAS Viya RandomForestClassifier instance with hyperparameters set based on the trial.
+    """
     rf_n_estimators = trial.suggest_int("rf_n_estimators", 20, 100)
     rf_max_depth = trial.suggest_int("rf_max_depth", 5, 25)
     rf_min_samples_leaf = trial.suggest_int("rf_min_samples_leaf", 5, 30)
@@ -262,6 +405,15 @@ def create_sas_rf(trial):
     )
 
 def create_sklearn_dtree(trial):
+    """
+    Creates a Decision Tree classifier using scikit-learn with hyperparameters optimized via Optuna.
+
+    Parameters:
+    trial (optuna.trial.Trial): The Optuna trial used for hyperparameter optimization.
+
+    Returns:
+    SKDecisionTreeClassifier: A scikit-learn DecisionTreeClassifier instance with hyperparameters set based on the trial.
+    """
     dtree_max_depth = trial.suggest_int("dtree_max_depth", 5, 15)
     dtree_min_samples_leaf = trial.suggest_int("dtree_min_samples_leaf", 5, 25)
     return SKDecisionTreeClassifier(
@@ -271,6 +423,15 @@ def create_sklearn_dtree(trial):
     )
 
 def create_sas_dtree(trial):
+    """
+    Creates a Decision Tree classifier using sasviya with hyperparameters optimized via Optuna.
+
+    Parameters:
+    trial (optuna.trial.Trial): The Optuna trial used for hyperparameter optimization.
+
+    Returns:
+    SASDecisionTreeClassifier: A SAS Viya DecisionTreeClassifier instance with hyperparameters set based on the trial.
+    """
     dtree_max_depth = trial.suggest_int("dtree_max_depth", 5, 15)
     dtree_min_samples_leaf = trial.suggest_int("dtree_min_samples_leaf", 5, 25)
     return SASDecisionTreeClassifier(
@@ -279,6 +440,15 @@ def create_sas_dtree(trial):
     )
 
 def create_sklearn_gb(trial):
+    """
+    Creates a Gradient Boosting classifier using scikit-learn with hyperparameters optimized via Optuna.
+
+    Parameters:
+    trial (optuna.trial.Trial): The Optuna trial used for hyperparameter optimization.
+
+    Returns:
+    SKGradientBoostingClassifier: A scikit-learn GradientBoostingClassifier instance with hyperparameters set based on the trial.
+    """
     gb_n_estimators = trial.suggest_int("gb_n_estimators", 20, 100)
     gb_max_depth = trial.suggest_int("gb_max_depth", 3, 10)
     gb_min_samples_leaf = trial.suggest_int("gb_min_samples_leaf", 5, 30)
@@ -295,6 +465,15 @@ def create_sklearn_gb(trial):
     )
 
 def create_sas_gb(trial):
+    """
+    Creates a Gradient Boosting classifier using sasviya with hyperparameters optimized via Optuna.
+
+    Parameters:
+    trial (optuna.trial.Trial): The Optuna trial used for hyperparameter optimization.
+
+    Returns:
+    SASGradientBoostingClassifier: A SAS Viya GradientBoostingClassifier instance with hyperparameters set based on the trial.
+    """
     gb_n_estimators = trial.suggest_int("gb_n_estimators", 20, 100)
     gb_max_depth = trial.suggest_int("gb_max_depth", 3, 10)
     gb_min_samples_leaf = trial.suggest_int("gb_min_samples_leaf", 5, 30)
@@ -312,6 +491,17 @@ def create_sas_gb(trial):
 
 # Define objective function
 class Objective:
+    """
+    Objective function for hyperparameter optimization with Optuna.
+
+    The objective function optimizes the hyperparameters of different classifiers (Random Forest, Decision Tree, Gradient Boosting)
+    from either scikit-learn or SAS Viya. The function also handles pre-processing, cross-validation, and resampling.
+
+    Parameters:
+    X (pandas.DataFrame): The features dataset used for model training and validation.
+    y (pandas.Series): The target variable dataset used for model training and validation.
+    preprocessor (sklearn.pipeline.Pipeline): The preprocessor for the data, typically used for scaling or transformation.
+    """
     def __init__(self, X, y, preprocessor):
         self.X = X
         self.y = y
