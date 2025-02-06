@@ -19,7 +19,7 @@ In this project, we:
 - `data` folder: It contains raw and processed datasets used and created throughout the project.
 - Three Jupyter Notebooks guiding the full churn prediction pipeline (data cleaning, data preparation, model training/evaluation, and cutoff optimization).
 - `utils.py` and `model_building_utils.py`: Python utility scripts for preprocessing, data visualization, data preparation, and model training.
-- `requirements.txt` – Lists the required Python packages for this project.
+- `requirements.txt`: It lists the required Python packages for this project.
 
 # 🔧 Setup Instructions
 
@@ -41,7 +41,7 @@ To ensure a smooth workflow, we recommend creating a dedicated storage volume in
 
 By following these steps, you ensure that all necessary libraries are installed and that your work is safely stored and accessible across workbench sessions.
 
-# Notebooks
+# :notebook_with_decorative_cover: Notebooks
 
 ## Churn Prediction - Part 1: Data Cleaning
 
