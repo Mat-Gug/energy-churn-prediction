@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 # SAS models
 from sasviya.ml.linear_model import LogisticRegression as SASLogisticRegression
@@ -576,3 +577,64 @@ class Objective:
             auc_scores.append(auc_val)
 
         return np.mean(auc_scores)
+
+def test_model(y, preds, margins, event_value='Yes', discount_rate=0.1, discount_efficiency=0.8):
+    """Test a model by calculating the profit function for different probability thresholds
+    and determining the optimal probability cutoff for retention campaign."""
+    def find_best_p(preds, discount_rate, discount_efficiency, granularity=200):
+        """Finds the best probability cutoff to maximize profit."""
+        probas = np.linspace(0, 1, granularity)
+        output_profits = np.zeros(len(probas))
+        actual_churners = (y == event_value)
+
+        # Gains: Total potential profit assuming no customers churn
+        gains = np.sum(margins) * 12  # Annual profit assumption
+
+        # Loss: Profit lost due to actual churners
+        loss = np.sum(margins[actual_churners]) * 12
+
+        for i, p in enumerate(probas):
+            predicted_churners = preds>=p
+
+            # Prevented Loss: Profit saved from targeted churners who actually would have churned
+            prevented_loss = np.sum(margins[predicted_churners & actual_churners]) * 12 * discount_efficiency
+            
+            # Discount Loss (Non-Churners): Cost of giving discounts to those who wouldn't have churned
+            discount_loss_non_churners = np.sum(margins[predicted_churners & ~actual_churners]) * 12 * discount_rate
+            
+            # Discount Loss (Churners): Cost of giving discounts to those who would've churned without it
+            discount_loss_churners = prevented_loss * discount_rate
+            
+            # Total Discount Loss
+            discount_loss = discount_loss_non_churners + discount_loss_churners
+            
+            # Compute Profit
+            output_profits[i] = gains - loss + prevented_loss - discount_loss
+
+        best_profit = max(output_profits)
+        best_p_index = np.argmax(output_profits)
+        best_p = probas[best_p_index]
+        
+        # Baseline profit without intervention
+        worst_profit = gains - loss
+
+        return probas, output_profits, best_p, best_profit, worst_profit
+    
+    # Find optimal cutoff and profit
+    probas, output_profits, best_p, best_profit, worst_profit = find_best_p(preds, discount_rate, discount_efficiency, 200)
+    
+    # Calculate additional metrics
+    num_customers_best_p = np.sum(preds >= best_p)
+    total_customers = len(y)
+    
+    print(f"Optimal threshold: {round(best_p, 4)}")
+    print(f"At this threshold, apply a {discount_rate * 100}% discount to identified high-risk customers.")
+    print(f"Estimated financial impact: {round(best_profit - worst_profit, 2)} € ({round(100 * (best_profit - worst_profit) / worst_profit, 2)}% increase in profit compared to no intervention).")
+    print(f"{num_customers_best_p} out of {total_customers} customers ({round(100 * num_customers_best_p / total_customers, 2)}%) would receive the discount.")
+    
+    plt.plot(probas, output_profits)
+    plt.xlabel("Probability Cutoff")
+    plt.ylabel("Annual Profit (€)")
+    plt.axvline(x=best_p, color='red', linestyle='--', label=f'Optimal p* = {round(best_p, 4)}')
+    plt.legend()
+    plt.show()

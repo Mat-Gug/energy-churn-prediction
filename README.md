@@ -1,10 +1,10 @@
-# 🔥 Predicting customer churn in the energy sector with SAS Viya Workbench
+# :fire: Predicting customer churn in the energy sector with SAS Viya Workbench
 
 Customer churn is a major challenge for energy providers, directly impacting revenue and long-term business stability. This project aims to develop a churn prediction model to help energy companies proactively identify at-risk customers and implement targeted retention strategies. The dataset we used can be found [here](https://www.kaggle.com/datasets/erolmasimov/powerco). It is a Kaggle dataset that provides insights into Small and Medium Enterprises (SMEs) served by the PowerCO energy supplier.
 
 The goal is to build and evaluate machine learning models using both **[scikit-learn](https://scikit-learn.org/stable/index.html)** and the **[SAS Python API](https://go.documentation.sas.com/doc/en/workbenchcdc/v_001/vwbpymlpg/titlepage.htm)** available in **[SAS Viya Workbench](https://go.documentation.sas.com/doc/en/workbenchcdc/v_001/workbenchwlcm/home.htm)**, which enables users to leverage SAS analytics within Python workflows. The best-performing model is selected using a hyperparameter tuning procedure, and a final cutoff optimization step is performed to maximize business impact from the retention campaign.
 
-# 📌 Project Overview
+# :pushpin: Project Overview
 
 In this project, we:
 
@@ -15,15 +15,25 @@ In this project, we:
 - Optimize model hyperparameters using [Optuna](https://optuna.org/).
 - Determine the optimal probability cutoff for maximizing retention campaign effectiveness.
 
-# 📂 Repository Structure
-- `data` folder: It contains raw and processed datasets used and created throughout the project.
+# :open_file_folder: Repository Structure
+- `data` folder: It contains raw and processed datasets used and generated throughout the project.
+- `img` folder: It stores images used in the project files.
 - Three Jupyter Notebooks guiding the full churn prediction pipeline (data cleaning, data preparation, model training/evaluation, and cutoff optimization).
 - `utils.py` and `model_building_utils.py`: Python utility scripts for preprocessing, data visualization, data preparation, and model training.
-- `requirements.txt`: It lists the required Python packages for this project.
+- `requirements.txt`: It lists all required Python packages for this project.
+- `requirements_short.txt`: It specifies only the Python packages that need to be additionally installed in SAS Viya Workbench for this project.
 
-# 🔧 Setup Instructions
+# :wrench: Setup Instructions
 
-To ensure the project works properly, we recommend creating a dedicated storage location in SAS Viya Workbench to separate the different Python dependencies required for various projects. To do so, follow the steps outlined in the [documentation](https://go.documentation.sas.com/doc/en/workbenchcdc/v_001/workbenchgs/p1oa82y6hbc2vfn1po8y224qxwx9.htm). Next, when creating the workbench for the project (click [here](https://go.documentation.sas.com/doc/en/workbenchcdc/v_001/workbenchgs/n1fvzggnvda7v1n19e171jg5ug7i.htm) for the procedure), select the storage location you just created. Once the workbench has been set up, you can open it in your IDE of choice (Visual Studio Code, Jupyter Notebook, or Jupyter Lab), then clone this repository by running the following command in the terminal:
+To ensure the project works properly, we recommend creating a dedicated storage location in SAS Viya Workbench to separate the different Python dependencies required for various projects. To do so, follow the steps outlined in the [documentation](https://go.documentation.sas.com/doc/en/workbenchcdc/v_001/workbenchgs/p1oa82y6hbc2vfn1po8y224qxwx9.htm). Next, when creating the workbench for the project (click [here](https://go.documentation.sas.com/doc/en/workbenchcdc/v_001/workbenchgs/n1fvzggnvda7v1n19e171jg5ug7i.htm) for the procedure), select the storage location you just created and rename the mounting folder to `myfolder`:
+
+<div align="center">
+  <img src="img/mounting_folder.png" scale="50%">
+</div>
+
+This is recommended because each notebook defines a `repo_path` variable at the beginning, which assumes that the mounting folder is named `myfolder`. However, if you prefer, you can modify the `repo_path` variable to match your desired mounting folder path.
+
+Once the workbench has been set up, you can open it in your IDE of choice (Visual Studio Code, Jupyter Notebook, or Jupyter Lab), then clone this repository by running the following command in the terminal:
 ```
 git clone https://github.com/Mat-Gug/energy-churn-prediction.git
 ``` 
