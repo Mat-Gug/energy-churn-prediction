@@ -23,23 +23,15 @@ In this project, we:
 
 # 🔧 Setup Instructions
 
-To ensure a smooth workflow, we recommend creating a dedicated storage volume in SAS Viya Workbench for this project. This allows you to persist data, scripts, and models across different workbench sessions. Follow these steps:
-
-1. **Create a Storage Volume**:
-    - In SAS Viya Workbench, navigate to the Storage section and create a new volume specifically for this project.
-    - Create a Workbench and Mount the Storage Volume. When launching a new workbench session, make sure to attach the volume created in the previous step.
-3. **Install Required Dependencies**:
-    - Open a terminal in your IDE of choice (Visual Studio Code, Jupyter Notebook, or Jupyter Lab).
-    - Navigate to the repository’s root folder:
-        ```
-        cd /path/to/repository
-        ```
-    - Install the required Python dependencies:
-        ```
-        pip install -r requirements.txt
-        ```
-
-By following these steps, you ensure that all necessary libraries are installed and that your work is safely stored and accessible across workbench sessions.
+To ensure the project works properly, we recommend creating a dedicated storage location in SAS Viya Workbench to separate the different Python dependencies required for various projects. To do so, follow the steps outlined in the [documentation](https://go.documentation.sas.com/doc/en/workbenchcdc/v_001/workbenchgs/p1oa82y6hbc2vfn1po8y224qxwx9.htm). Next, when creating the workbench for the project (click [here](https://go.documentation.sas.com/doc/en/workbenchcdc/v_001/workbenchgs/n1fvzggnvda7v1n19e171jg5ug7i.htm) for the procedure), select the storage location you just created. Once the workbench has been set up, you can open it in your IDE of choice (Visual Studio Code, Jupyter Notebook, or Jupyter Lab), then clone this repository by running the following command in the terminal:
+```
+git clone https://github.com/Mat-Gug/energy-churn-prediction.git
+``` 
+Finally, navigate to the repository's root folder and install the required Python dependencies:
+```
+cd /path/to/repository
+pip install -r requirements_short.txt
+```
 
 # :notebook_with_decorative_cover: Notebooks
 
