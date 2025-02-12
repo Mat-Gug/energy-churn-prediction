@@ -642,18 +642,15 @@ class Objective:
 
         return np.mean(auc_scores)
 
-def train_best_pipeline(X, y, best_params, preprocessor):
+
+def create_best_pipeline(best_params, preprocessor):
     """
-    Creates and trains a machine learning pipeline using the best parameters found through hyperparameter tuning.
+    Creates a machine learning pipeline using the best parameters found through hyperparameter tuning.
 
     The function selects the appropriate classifier from SAS Viya or scikit-learn based on the given parameters.
-    It then constructs a pipeline with preprocessing steps, applies resampling if needed, and trains the model.
+    It then constructs a pipeline with preprocessing steps.
 
     Parameters:
-    X : pd.DataFrame
-        Feature matrix used for training.
-    y : pd.Series
-        Target variable.
     best_params : dict
         Dictionary containing the best hyperparameters, including:
         - "classifier": The chosen classifier ("rf" for Random Forest, "dtree" for Decision Tree, "gb" for Gradient Boosting).
@@ -665,7 +662,7 @@ def train_best_pipeline(X, y, best_params, preprocessor):
 
     Returns:
     Pipeline
-        A trained pipeline containing preprocessing steps and the selected classifier.
+        A pipeline containing preprocessing steps and the selected classifier.
 
     Raises:
     ValueError
@@ -704,13 +701,75 @@ def train_best_pipeline(X, y, best_params, preprocessor):
     
     pipeline = Pipeline(pipeline_steps)
 
+    return pipeline
+
+# def create_best_pipeline(best_params, preprocessor):
+#     """
+#     Creates a machine learning pipeline using the best parameters found through hyperparameter tuning.
+
+    
+#     """
+#     classifiers = {
+#         "sasviya": {"rf": create_sas_rf,
+#                     "dtree": create_sas_dtree,
+#                     "gb": create_sas_gb},
+#         "sklearn": {"rf": create_sklearn_rf,
+#                     "dtree": create_sklearn_dtree,
+#                     "gb": create_sklearn_gb},
+#     }
+
+#     # Extract the best parameters
+#     classifier_name = best_params["classifier"]
+#     library_name = best_params["library"]
+
+#     # Create the classifier using the best parameters
+#     library_classifiers = classifiers.get(library_name, {})
+#     if classifier_name in library_classifiers:
+#         classifier_obj = library_classifiers[classifier_name](optuna.trial.FixedTrial(best_params))
+#     else:
+#         raise ValueError(f"Unsupported classifier: {classifier_name}")
+
+#     # Create the pipeline steps
+#     pipeline_steps = [('imputer', MissingValueImputer()), ('cat_filter', CategoricalLevelFilter())]
+
+#     if library_name == "sklearn":
+#         pipeline_steps.append(('preprocessor', preprocessor))
+
+#     pipeline_steps.append(('model', classifier_obj))
+    
+#     return Pipeline(pipeline_steps)
+
+
+def train_pipeline(pipeline, X, y, best_params):
+    """
+    Trains the given pipeline on the provided dataset, applying resampling if needed.
+
+    Parameters:
+    pipeline : Pipeline
+        The machine learning pipeline to train.
+    X : pd.DataFrame
+        Feature matrix used for training.
+    y : pd.Series
+        Target variable.
+    best_params : dict
+        Dictionary containing additional hyperparameters, including:
+        - "resampling": Boolean indicating whether to apply resampling.
+        - "sampling_strategy": If resampling is enabled, specifies the strategy for undersampling.
+
+    Returns:
+    Pipeline
+        The trained pipeline.
+    """
+    resampling = best_params["resampling"]
+
     # Apply resampling if specified
     if resampling:
         sampling_strategy = best_params["sampling_strategy"]
         rus = RandomUnderSampler(random_state=12345, sampling_strategy=sampling_strategy)
         X, y = rus.fit_resample(X, y)
-    
-    # Train the pipeline on the entire training set
+
+    # Train the pipeline
+    library_name = best_params["library"]
     if library_name == "sasviya":
         cat_cols = X.select_dtypes(exclude='number').columns
         pipeline.fit(X, y, model__nominals=cat_cols)
@@ -718,7 +777,6 @@ def train_best_pipeline(X, y, best_params, preprocessor):
         pipeline.fit(X, y)
 
     return pipeline
-
 
 def optimize_discount_strategy(y, preds, margins, event_value='Yes', discount_rate=0.1, discount_efficiency=0.8):
     """
