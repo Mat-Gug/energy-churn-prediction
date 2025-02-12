@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+import seaborn as sns
+import optuna
 
 # SAS models
 from sasviya.ml.linear_model import LogisticRegression as SASLogisticRegression
@@ -12,11 +15,14 @@ from sasviya.ml.tree import GradientBoostingClassifier as SASGradientBoostingCla
 # scikit-learn classes and models
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import StratifiedKFold
 from sklearn.linear_model import LogisticRegression as SKLogisticRegression
+from sklearn.linear_model import LinearRegression as SKLinearRegression
 from sklearn.tree import DecisionTreeClassifier as SKDecisionTreeClassifier
+from sklearn.tree import DecisionTreeRegressor as SKDecisionTreeRegressor
 from sklearn.ensemble import RandomForestClassifier as SKRandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier as SKGradientBoostingClassifier
 from sklearn.metrics import roc_auc_score
@@ -96,6 +102,8 @@ class MissingValueImputer(BaseEstimator, TransformerMixin):
             # Alternative: remove all missing columns for the features!
             train_features = non_missing_data.drop(columns=[col])
             train_target = non_missing_data[col]
+            cat_cols_with_two_values = [col for col in train_features.columns if X[col].nunique() == 2]
+            cat_cols_with_more_values = [col for col in train_features.columns if X[col].nunique() > 2]
             
             # Train the imputation model
             imputation_model = SASDecisionTreeRegressor()
@@ -357,6 +365,62 @@ def train_and_evaluate_model(
     }])
 
 
+def plot_auc_and_runtime(metrics_df, data_version="non-transformed"):
+    """
+    Plots a side-by-side comparison of AUC scores and runtimes for SAS and scikit-learn models.
+
+    Parameters:
+    - metrics_df (pd.DataFrame): DataFrame containing model metrics, including AUC scores and runtimes.
+    """
+    colors = {"SAS": "blue", "scikit-learn": "orange"}
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    # AUC Comparison Plot
+    ax = sns.barplot(
+        data=metrics_df, 
+        x="Model Type", 
+        y="AUC_val", 
+        hue="Library", 
+        palette=colors,
+        ax=axes[0]
+    )
+    axes[0].set_title(f"AUC Comparison of SAS vs scikit-learn Models ({data_version})")
+    axes[0].set_ylabel("AUC Score")
+    axes[0].set_xlabel("Model Type")
+    axes[0].legend(title="Library")
+    axes[0].set_ylim(0, metrics_df["AUC_val"].max() * 1.2)
+
+    # Add AUC values to bars
+    for p in ax.patches:
+        axes[0].annotate(f"{p.get_height():.2f}", 
+                         (p.get_x() + p.get_width() / 2., p.get_height()), 
+                         ha='center', va='bottom', fontsize=10, color='black')
+
+    # Runtime Comparison Plot
+    ax = sns.barplot(
+        data=metrics_df, 
+        x="Model Type", 
+        y="Runtime", 
+        hue="Library", 
+        palette=colors,
+        ax=axes[1]
+    )
+    axes[1].set_title(f"Runtime Comparison of SAS vs scikit-learn Models ({data_version})")
+    axes[1].set_ylabel("Runtime (seconds)")
+    axes[1].set_xlabel("Model Type")
+    axes[1].legend(title="Library")
+
+    # Add runtime values to bars
+    for p in ax.patches:
+        axes[1].annotate(f"{p.get_height():.2f}s", 
+                         (p.get_x() + p.get_width() / 2., p.get_height()), 
+                         ha='center', va='bottom', fontsize=10, color='black')
+
+    plt.tight_layout()
+    plt.show()
+
+
 def create_sklearn_rf(trial):
     """
     Creates a Random Forest classifier using scikit-learn with hyperparameters optimized via Optuna.
@@ -578,9 +642,114 @@ class Objective:
 
         return np.mean(auc_scores)
 
-def test_model(y, preds, margins, event_value='Yes', discount_rate=0.1, discount_efficiency=0.8):
-    """Test a model by calculating the profit function for different probability thresholds
-    and determining the optimal probability cutoff for retention campaign."""
+def train_best_pipeline(X, y, best_params, preprocessor):
+    """
+    Creates and trains a machine learning pipeline using the best parameters found through hyperparameter tuning.
+
+    The function selects the appropriate classifier from SAS Viya or scikit-learn based on the given parameters.
+    It then constructs a pipeline with preprocessing steps, applies resampling if needed, and trains the model.
+
+    Parameters:
+    X : pd.DataFrame
+        Feature matrix used for training.
+    y : pd.Series
+        Target variable.
+    best_params : dict
+        Dictionary containing the best hyperparameters, including:
+        - "classifier": The chosen classifier ("rf" for Random Forest, "dtree" for Decision Tree, "gb" for Gradient Boosting).
+        - "library": The ML library ("sasviya" or "sklearn").
+        - "resampling": Boolean indicating whether to apply resampling.
+        - "sampling_strategy": If resampling is enabled, specifies the strategy for undersampling.
+    preprocessor : ColumnTransformer
+        Preprocessing pipeline for categorical and numerical features (used for scikit-learn models).
+
+    Returns:
+    Pipeline
+        A trained pipeline containing preprocessing steps and the selected classifier.
+
+    Raises:
+    ValueError
+        If the specified classifier is not supported.
+    """
+    classifiers = {
+        "sasviya": {"rf": create_sas_rf,
+                    "dtree": create_sas_dtree,
+                    "gb": create_sas_gb},
+        "sklearn": {"rf": create_sklearn_rf,
+                    "dtree": create_sklearn_dtree,
+                    "gb": create_sklearn_gb},
+    }
+
+    # Extract the best parameters
+    classifier_name = best_params["classifier"]
+    library_name = best_params["library"]
+    resampling = best_params["resampling"]
+
+    # Create the classifier using the best parameters
+    library_classifiers = classifiers[library_name]
+    if classifier_name in library_classifiers:
+        classifier_obj = library_classifiers[classifier_name](optuna.trial.FixedTrial(best_params))
+    else:
+        raise ValueError(f"Unsupported classifier: {classifier_name}")
+
+    # Create the pipeline steps
+    pipeline_steps = []
+    pipeline_steps.append(('imputer', MissingValueImputer()))
+    pipeline_steps.append(('cat_filter', CategoricalLevelFilter()))
+
+    if library_name == "sklearn":
+        pipeline_steps.append(('preprocessor', preprocessor))
+
+    pipeline_steps.append(('model', classifier_obj))
+    
+    pipeline = Pipeline(pipeline_steps)
+
+    # Apply resampling if specified
+    if resampling:
+        sampling_strategy = best_params["sampling_strategy"]
+        rus = RandomUnderSampler(random_state=12345, sampling_strategy=sampling_strategy)
+        X, y = rus.fit_resample(X, y)
+    
+    # Train the pipeline on the entire training set
+    if library_name == "sasviya":
+        cat_cols = X.select_dtypes(exclude='number').columns
+        pipeline.fit(X, y, model__nominals=cat_cols)
+    elif library_name == "sklearn":
+        pipeline.fit(X, y)
+
+    return pipeline
+
+
+def optimize_discount_strategy(y, preds, margins, event_value='Yes', discount_rate=0.1, discount_efficiency=0.8):
+    """
+    Evaluates a retention strategy by optimizing the probability threshold for predicting customer churn. 
+    The function calculates the expected profit for different probability cutoffs and identifies the optimal 
+    threshold that maximizes financial impact.
+
+    Parameters:
+    y : array-like
+        True labels indicating whether a customer churned or not.
+    preds : array-like
+        Predicted churn probabilities for each customer.
+    margins : array-like
+        Monthly profit contribution of each customer.
+    event_value : str, default='Yes'
+        Value in `y` representing churned customers.
+    discount_rate : float, default=0.1
+        Discount percentage applied to prevent churn (as a fraction, e.g., 0.1 for 10%).
+    discount_efficiency : float, default=0.8
+        Effectiveness of the discount in preventing churn (as a fraction, e.g., 0.8 for 80%).
+
+    Returns:
+    None
+        Displays the optimal probability threshold, estimated financial impact, and plots the profit function.
+
+    Notes:
+    ------
+    - The function assumes that applying a discount to high-risk customers can prevent a portion of them from 
+      churning based on `discount_efficiency`.
+    - The optimization is based on maximizing profit by balancing prevented losses with the cost of applied discounts.
+    """
     def find_best_p(preds, discount_rate, discount_efficiency, granularity=200):
         """Finds the best probability cutoff to maximize profit."""
         probas = np.linspace(0, 1, granularity)
