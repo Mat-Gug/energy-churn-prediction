@@ -703,42 +703,6 @@ def create_best_pipeline(best_params, preprocessor):
 
     return pipeline
 
-# def create_best_pipeline(best_params, preprocessor):
-#     """
-#     Creates a machine learning pipeline using the best parameters found through hyperparameter tuning.
-
-    
-#     """
-#     classifiers = {
-#         "sasviya": {"rf": create_sas_rf,
-#                     "dtree": create_sas_dtree,
-#                     "gb": create_sas_gb},
-#         "sklearn": {"rf": create_sklearn_rf,
-#                     "dtree": create_sklearn_dtree,
-#                     "gb": create_sklearn_gb},
-#     }
-
-#     # Extract the best parameters
-#     classifier_name = best_params["classifier"]
-#     library_name = best_params["library"]
-
-#     # Create the classifier using the best parameters
-#     library_classifiers = classifiers.get(library_name, {})
-#     if classifier_name in library_classifiers:
-#         classifier_obj = library_classifiers[classifier_name](optuna.trial.FixedTrial(best_params))
-#     else:
-#         raise ValueError(f"Unsupported classifier: {classifier_name}")
-
-#     # Create the pipeline steps
-#     pipeline_steps = [('imputer', MissingValueImputer()), ('cat_filter', CategoricalLevelFilter())]
-
-#     if library_name == "sklearn":
-#         pipeline_steps.append(('preprocessor', preprocessor))
-
-#     pipeline_steps.append(('model', classifier_obj))
-    
-#     return Pipeline(pipeline_steps)
-
 
 def train_pipeline(pipeline, X, y, best_params):
     """

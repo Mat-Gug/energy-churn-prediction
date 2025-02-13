@@ -53,10 +53,11 @@ This notebook focuses on loading and preprocessing the dataset to ensure data co
 2. **Feature Mapping**: Replacing hashed categorical values with more human-readable labels.
 3. **Data Cleaning**: This involves several data quality checks.
     - Removing duplicate rows.
-    - Checking for negative values in numerical columns.
+    - Checking for negative values in some numeric columns.
     - Ensuring data consistency for features like `has_gas` and `cons_gas_12m`.
     - Identifying and handling invalid date sequences.
     - Verifying margin constraints for energy pricing.
+    
     All these potential redundant or inconsistent rows are saved to separate csv files for further investigation, if needed.
 4. **Missing Value Analysis**: Reporting and saving columns with missing values.
 5. **Saving Cleaned Data**: Exporting processed data for further analysis.
@@ -74,24 +75,24 @@ This notebook processes and prepares client and price data for churn prediction 
 5. **Data Transformations**:
     - Some low cardinality numeric variables (`nb_prod_act`, `num_years_antig`, `forecast_discount_energy`) are converted into categorical variables, grouping rare values.
     - Highly skewed numerical variables are transformed using square or log transformations.
-    - Numerical columns with many zero values are transformed creating:
-        - a flag indicator variable telling whether the variable is in the spike (0 value) or in the distribution (non-zero value).
-        - a variable created from the values of the original one in the distribution and where the observations that have the value at the spike are set to missing. A log or square transformatio) is then performed on the non-missing values of this variable in case of highe skewness), while missing values will be imputed during the Model Building phase.
-7.** Correlation Analysis and Feature Selectio**: After plotting a correlation matrix for both the non-transformed and transformed version of the dataset, redundant variables are removed from the two tables to avoid multicollinearity, overfitting and improve model interpretability..
-8.** Saving Processed Dat**:-Tth non-transformed and thee transformed datases are savedt totwo separatea CSV filse forthe next part of the projects.
+    - Numerical columns with many zero values are transformed as follows:
+        - A binary flag variable is created to indicate whether a value is in the spike (0) or in the distribution (non-zero).
+        - A new variable is derived from the original one, where non-zero values are retained, and zeros are set to missing. If this variable exhibits high skewness, a log or square transformation is applied to the non-missing values. Missing values will be imputed during the Model Building phase.
+6. **Correlation Analysis and Feature Selection**: A correlation matrix is plotted for both the non-transformed and transformed versions of the dataset. Redundant variables are then removed to prevent multicollinearity, reduce overfitting, and enhance model interpretability.
+7. **Saving Processed Data**: The non-transformed and transformed datasets are saved as separate CSV files for use in the next phase of the project.
 
 ## Churn Prediction - Part 3: Model Training, Evaluation, an Cutoff Optimization
 
-This notebook focuses on training and evaluating multiple machine learning models for churn prediction using both `sasviya` and `scikit-learn libraries`. It also includes hyperparameter optimization using **Optuna** to find the best-performing model. The key steps are:
-1. **Model Training and Evaluation (Non-Transformed Data)**:  Logistic Regression, Decision Tree, Random Forest, and Gradient Boosting model are traineds using both `sasviya` and `scikit-learn`, implemening cross-validation for model evaluation. Then, the trained models are compareds based on AUC score for a first evaluation and comparison of the two libraries.
+This notebook focuses on training and evaluating multiple machine learning models for churn prediction using both `sasviya` and `scikit-learn` libraries. It also includes hyperparameter optimization using **Optuna** to find the best-performing model. The key steps are:
+1. **Model Training and Evaluation (Non-Transformed Data)**:  Logistic Regression, Decision Tree, Random Forest, and Gradient Boosting models are trained using both `sasviya` and `scikit-learn`, implementing cross-validation for model evaluation. Then, the trained models are compared based on AUC scores for an initial assessment of the two libraries.
 2. **Hyperparameter Optimization with Optuna (Non-Transformed Data)**: An Optuna study is run with multiple trials to maximize model performance based on AUC score on the validation set, implementing also in this case cross-validation. Finally, the best-performing model is selected and re-trained on the full training set.
-3. **Model Training and Hyperparameter Optimization (Transformed Data)**: The model training and evaluation process is repeated for the transformed data, in order to understand which data leads to the best performances
+3. **Model Training and Hyperparameter Optimization (Transformed Data)**: The same training and evaluation process is repeated using the transformed dataset to determine which preprocessing approach yields the best performance.
 4. **Model Selection and Cutoff optimization**: After choosing the best model from the previous steps, a cutoff optimization for a retention campaign is performed, consisting of the following steps:
     - Choose the discount rate and the expected retention efficiency of the discount.
     - Determine the optimal probability threshold to maximize annual profit by balancing prevented churn losses against the cost of offering discounts.
 
 To sum up, the key features of this last notebook are:
 - Comparison of `sasviya` and `scikit-learn` models.
-- Automated hyperparameter tuning with Optuna 
+- Automated hyperparameter tuning with Optuna.
 - Cross-validation for model evaluation.
 - Cutoff optimization for identifying customers to target with a retention campaign.
