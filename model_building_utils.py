@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -313,7 +314,7 @@ def train_and_evaluate_model(
     sampling_strategy (float, optional): Resampling strategy for imbalanced datasets (default is 0.25).
 
     Returns:
-    dict: A dictionary containing the model, evaluation metrics, and cross-validation results.
+    dict: A dictionary containing the model, evaluation metrics, cross-validation results, and training times.
     """
     kf = StratifiedKFold(n_splits=k, shuffle=True, random_state=12345)
 
@@ -333,10 +334,13 @@ def train_and_evaluate_model(
             X_train, y_train = rus.fit_resample(X_train, y_train)
         
         pipeline = create_pipeline(model, numeric_cols=numeric_cols)
+        start_time = time.time()
         if nominals is not None:
              pipeline.fit(X_train, y_train, model__nominals=nominals)
         else:
              pipeline.fit(X_train, y_train)
+        end_time = time.time()
+        training_time = end_time - start_time
 
         # # Scale numeric columns
         # if scaler:
@@ -361,7 +365,8 @@ def train_and_evaluate_model(
         'AUC_train': round(np.mean(auc_train_scores), 3),
         'AUC_val': round(np.mean(auc_val_scores), 3),
         'AUC_train_std': round(np.std(auc_train_scores), 3),
-        'AUC_val_std': round(np.std(auc_val_scores), 3)
+        'AUC_val_std': round(np.std(auc_val_scores), 3),
+        'Training time': round(training_time, 3)
     }])
 
 
@@ -370,7 +375,7 @@ def plot_auc_and_runtime(metrics_df, data_version="non-transformed"):
     Plots a side-by-side comparison of AUC scores and runtimes for SAS and scikit-learn models.
 
     Parameters:
-    - metrics_df (pd.DataFrame): DataFrame containing model metrics, including AUC scores and runtimes.
+    - metrics_df (pd.DataFrame): DataFrame containing model metrics, including AUC scores and training times.
     """
     colors = {"SAS": "blue", "scikit-learn": "orange"}
 
@@ -401,13 +406,13 @@ def plot_auc_and_runtime(metrics_df, data_version="non-transformed"):
     ax = sns.barplot(
         data=metrics_df, 
         x="Model Type", 
-        y="Runtime", 
+        y="Training time", 
         hue="Library", 
         palette=colors,
         ax=axes[1]
     )
-    axes[1].set_title(f"Runtime Comparison of SAS vs scikit-learn Models ({data_version})")
-    axes[1].set_ylabel("Runtime (seconds)")
+    axes[1].set_title(f"Training time Comparison of SAS vs scikit-learn Models ({data_version})")
+    axes[1].set_ylabel("Training time (seconds)")
     axes[1].set_xlabel("Model Type")
     axes[1].legend(title="Library")
 
